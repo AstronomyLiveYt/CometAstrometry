@@ -110,5 +110,5 @@ with open('astrometryoutput.txt', 'a') as s:
                 dtenths = abs(math.trunc((round(abs(((((abs(lat))-abs(ddegree))*60)-abs(dminute))*60),2)-dsecond)*100))
                 if dtenths > 99:
                     dtenths = 99
-                outfile = str(str(objid2)+str(year)+' '+ str(month).zfill(2)+' '+str('{0:.5f}'.format(day)).zfill(8)+' '+str(rhr).zfill(2)+' '+str(rminute).zfill(2)+' '+str(rsecond).zfill(2)+'.'+str(rtenths).zfill(3)[::-1]+''+sign+str(ddegree).zfill(2)+' '+str(dminute).zfill(2)+' '+str(dsecond).zfill(2)+'.'+str(dtenths).zfill(2)[::-1]+'                     '+site+'\n')
+                outfile = str(str(objid2)+str(year)+' '+ str(month).zfill(2)+' '+str('{0:.5f}'.format(day)).zfill(8)+' '+str(rhr).zfill(2)+' '+str(rminute).zfill(2)+' '+str(rsecond).zfill(2)+'.'+str(rtenths)[::-1].zfill(3)[::-1]+''+sign+str(ddegree).zfill(2)+' '+str(dminute).zfill(2)+' '+str(dsecond).zfill(2)+'.'+str(dtenths).zfill(2)[::-1]+'                     '+site+'\n')
                 s.write(outfile)
