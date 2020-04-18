@@ -19,6 +19,8 @@ if len(sys.argv) != 2:
     exit()
 pattern = '*.new*'
 filelist = os.listdir('.')
+#minval = int(float(sys.argv[1])*(255*255))
+#maxval = float(255/int(sys.argv[2]))
 mag = float(sys.argv[1])
 with open('CometID.txt') as f:
     lines = [line.rstrip('\n') for line in f]
@@ -59,8 +61,13 @@ with open('astrometryoutput.txt', 'a') as s:
             #Convert FITS to 8 bit image
             image_data = fits.getdata(entry)
             imagenew = np.array(image_data,dtype = np.float32)
-            imagenew = np.moveaxis(imagenew, 0, 2)
-            frame_height, frame_width, channels = imagenew.shape
+            try:
+                imagenew = np.moveaxis(imagenew, 0, 2)
+                frame_height, frame_width, channels = imagenew.shape
+            except:
+                imagenew = cv2.cvtColor(imagenew,cv2.COLOR_GRAY2BGR)
+                frame_height, frame_width = imagenew.shape
+                channels = 1
             tonemap = cv2.createTonemapReinhard(1, 0,0,1)
             imagenormalized = tonemap.process(imagenew)
             eightbit =  np.clip(imagenormalized*255, 0, 255).astype('uint8')
