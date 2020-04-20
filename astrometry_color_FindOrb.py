@@ -19,13 +19,11 @@ if len(sys.argv) != 2:
     exit()
 pattern = '*.new*'
 filelist = os.listdir('.')
-#minval = int(float(sys.argv[1])*(255*255))
-#maxval = float(255/int(sys.argv[2]))
 mag = float(sys.argv[1])
-with open('CometID.txt') as f:
+with open('AsteroidID.txt') as f:
     lines = [line.rstrip('\n') for line in f]
     objid = lines[0].split(': ')[1]
-    year = objid.split('/')[1].split(' ')[0]
+    year = objid.split(' ')[0]
     if int(year) > 1999:
         year = str('K'+year[2:4])
     elif int(year) > 1899:
@@ -34,9 +32,14 @@ with open('CometID.txt') as f:
         year = str('I'+year[2:4])
     elif int(year) > 1699:
         year = str('H'+year[2:4])
-    desig1 = objid.split('/')[1].split(' ')[1][0]
-    desig2 = str(int(objid.split('/')[1].split(' ')[1][1:3])).zfill(2)
-    objid2 = str('    ' + objid[0] + year + desig1 + desig2 + '0  C')
+    desig1 = objid.split(' ')[1]
+    desig2 = desig1[0]
+    desig3 = desig1[1]
+    try:
+        desig4 = desig1[2:]
+    except:
+        desig4 = '00'
+    objid2 = str('     ' + year + desig2 + desig4.zfill(2) + desig3)
     site = lines[1].split(': ')[1]
 
 with open('astrometryoutput.txt', 'a') as s:
@@ -48,10 +51,11 @@ with open('astrometryoutput.txt', 'a') as s:
             wcs = WCS(hdu)
             hdr = getheader(entry, 0)
             dateobs = hdr['DATE-OBS']
+            exposure = hdr['EXPTIME']
             idate, itime = dateobs.split('T')
             year, month, day = idate.split('-')
             hour, minute, seconds = itime.split(':')
-            dayfraction = ((((float(seconds)/60)+int(minute))/60)+int(hour))/24
+            dayfraction = (((((float(seconds)+(float(exposure)/2))/60)+int(minute))/60)+int(hour))/24
             day = int(day) + dayfraction
             second, millisecond = seconds.split('.')
             #print(dateobs)
@@ -61,13 +65,8 @@ with open('astrometryoutput.txt', 'a') as s:
             #Convert FITS to 8 bit image
             image_data = fits.getdata(entry)
             imagenew = np.array(image_data,dtype = np.float32)
-            try:
-                imagenew = np.moveaxis(imagenew, 0, 2)
-                frame_height, frame_width, channels = imagenew.shape
-            except:
-                imagenew = cv2.cvtColor(imagenew,cv2.COLOR_GRAY2BGR)
-                frame_height, frame_width = imagenew.shape
-                channels = 1
+            imagenew = np.moveaxis(imagenew, 0, 2)
+            frame_height, frame_width, channels = imagenew.shape
             tonemap = cv2.createTonemapReinhard(1, 0,0,1)
             imagenormalized = tonemap.process(imagenew)
             eightbit =  np.clip(imagenormalized*255, 0, 255).astype('uint8')
@@ -90,21 +89,37 @@ with open('astrometryoutput.txt', 'a') as s:
                 roibox = [(int((xcoord/mag)-10),int((ycoord/mag)-10)), (int((xcoord/mag)+10),int((ycoord/mag)+10))]
                 imageroi = eightbit[roibox[0][1]:roibox[1][1],roibox[0][0]:roibox[1][0]]
                 imageroi = cv2.cvtColor(imageroi, cv2.COLOR_BGR2GRAY)
-                imageroi = cv2.GaussianBlur(imageroi, (9, 9), 0)
+                imageroi = cv2.GaussianBlur(imageroi, (5, 5), 0)
                 min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(imageroi)
-                newxcoord = (max_loc[0]-10) + (xcoord/mag)
-                newycoord = (max_loc[1]-10) + (ycoord/mag)
-                eightbit[int(newycoord),int(newxcoord)] = (0,0,255)
-                print(newxcoord, newycoord)
-                cv2.imshow('bright point',eightbit)
+                minimum = float((max_val - min_val)/1.5 + min_val) 
+                thresh = cv2.threshold(imageroi, minimum, 255, cv2.THRESH_BINARY)[1]
+                cnts = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL,
+                cv2.CHAIN_APPROX_SIMPLE)
+                cX = []
+                cY = []
+                M = cv2.moments(cnts[0])
+                try:
+                    cX.append(int(M["m10"] / M["m00"]))
+                    cY.append(int(M["m01"] / M["m00"]))
+                except:
+                    print('Unable to measure this frame')
+                    pass
+                newxcoord = round(float(xcoord/mag) - float(10 - cX[0]))
+                newycoord = round(float(ycoord/mag) - float(10 - cY[0]))
+                #eightbit[int(newycoord),int(newxcoord)] = (0,0,255)
+                eightbitbright= cv2.resize(eightbit,None,fx=mag, fy=mag, interpolation = cv2.INTER_LINEAR)
+                eightbitbright[int(newycoord*mag),int(newxcoord*mag)] = (0,0,255)
+                cv2.imshow('thresh',thresh)
+                cv2.imshow('bright point',eightbitbright)
                 cv2.waitKey(2000)
                 lon, lat = wcs.all_pix2world((newxcoord), (newycoord), 0)
                 rhr = math.trunc(lon/15)
                 rminute = math.trunc(((lon/15)-rhr)*60)
                 rsecond = math.trunc(((((lon/15)-rhr)*60)-rminute)*60)
-                rtenths = math.trunc((round((((((lon/15)-rhr)*60)-rminute)*60),3)-rsecond)*1000)
-                if rtenths > 999:
-                    rtenths = 999
+                rtenths = math.trunc(((((((lon/15)-rhr)*60)-rminute)*60)-rsecond)*1000)
+                rtenths = str(rtenths)[0:3]
+                if int(rtenths) > 999:
+                    rtenths = '999'
                 if lat > 0:
                     sign = '+'
                 else:
@@ -117,5 +132,5 @@ with open('astrometryoutput.txt', 'a') as s:
                 dtenths = abs(math.trunc((round(abs(((((abs(lat))-abs(ddegree))*60)-abs(dminute))*60),2)-dsecond)*100))
                 if dtenths > 99:
                     dtenths = 99
-                outfile = str(str(objid2)+str(year)+' '+ str(month).zfill(2)+' '+str('{0:.5f}'.format(day)).zfill(8)+' '+str(rhr).zfill(2)+' '+str(rminute).zfill(2)+' '+str(rsecond).zfill(2)+'.'+str(rtenths)[::-1].zfill(3)[::-1]+''+sign+str(ddegree).zfill(2)+' '+str(dminute).zfill(2)+' '+str(dsecond).zfill(2)+'.'+str(dtenths).zfill(2)[::-1]+'                     '+site+'\n')
+                outfile = str(str(objid2)+'  C'+str(year)+' '+ str(month).zfill(2)+' '+str('{0:.5f}'.format(day)).zfill(8)+' '+str(rhr).zfill(2)+' '+str(rminute).zfill(2)+' '+str(rsecond).zfill(2)+'.'+str(rtenths)[::-1].zfill(3)[::-1]+''+sign+str(ddegree).zfill(2)+' '+str(dminute).zfill(2)+' '+str(dsecond).zfill(2)+'.'+str(dtenths).zfill(2)[::-1]+'                     '+site+'\n')
                 s.write(outfile)
