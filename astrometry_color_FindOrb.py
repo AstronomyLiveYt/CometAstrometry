@@ -57,7 +57,11 @@ with open('astrometryoutput.txt', 'a') as s:
             hour, minute, seconds = itime.split(':')
             dayfraction = (((((float(seconds)+(float(exposure)/2))/60)+int(minute))/60)+int(hour))/24
             day = int(day) + dayfraction
-            second, millisecond = seconds.split('.')
+            try:
+                second, millisecond = seconds.split('.')
+            except:
+                second = seconds
+                millisecond = 0
             #print(dateobs)
             cv2.namedWindow(entry)
             cv2.setMouseCallback(entry, mouse_click)
@@ -65,8 +69,15 @@ with open('astrometryoutput.txt', 'a') as s:
             #Convert FITS to 8 bit image
             image_data = fits.getdata(entry)
             imagenew = np.array(image_data,dtype = np.float32)
-            imagenew = np.moveaxis(imagenew, 0, 2)
-            frame_height, frame_width, channels = imagenew.shape
+            try:
+                imagenew = np.moveaxis(imagenew, 0, 2)
+            except:
+                pass
+            try:
+                frame_height, frame_width, channels = imagenew.shape
+            except Exception as E:
+                imagenew = cv2.cvtColor(imagenew,cv2.COLOR_GRAY2BGR)
+                channels = 1
             tonemap = cv2.createTonemapReinhard(1, 0,0,1)
             imagenormalized = tonemap.process(imagenew)
             eightbit =  np.clip(imagenormalized*255, 0, 255).astype('uint8')
@@ -75,6 +86,11 @@ with open('astrometryoutput.txt', 'a') as s:
             eightbit=cv2.cvtColor(hsvImg,cv2.COLOR_HSV2BGR)
             
             cl1 = cv2.resize(eightbit,None,fx=mag, fy=mag, interpolation = cv2.INTER_LINEAR)
+            #cl1 = cv2.cvtColor(cl1,cv2.COLOR_BGR2GRAY)
+            #alpha = 7
+            #beta = -80
+            #cl1 = cv2.convertScaleAbs(cl1, alpha=alpha, beta=beta)
+            #cl1 = cv2.equalizeHist(cl1)
             print(entry,end='\r')
             cv2.imshow(entry,cl1)
             k = cv2.waitKey(0)& 0xFF
